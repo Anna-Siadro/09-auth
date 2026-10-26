@@ -27,7 +27,6 @@ export async function proxy(request: NextRequest) {
         for (const cookieStr of cookieArray) {
           const parsed = parseSetCookie(cookieStr);
           if (parsed.value) {
-            request.cookies.set(parsed.name, parsed.value);
             newCookies.push(parsed);
           }
         }
@@ -43,11 +42,23 @@ export async function proxy(request: NextRequest) {
   if (isPrivateRoute && !isAuthenticated) {
     response = NextResponse.redirect(new URL('/sign-in', request.url));
   } else if (isPublicRoute && isAuthenticated) {
-    response = NextResponse.redirect(new URL('/profile', request.url));
+    response = NextResponse.redirect(new URL('/', request.url));
+  } else if (newCookies.length > 0) {
+    // передаємо оновлені токени далі серверним компонентам через копію заголовків
+    const requestHeaders = new Headers(request.headers);
+    const cookieHeader = [
+      request.headers.get('cookie'),
+      ...newCookies.map(cookie => `${cookie.name}=${cookie.value}`),
+    ]
+      .filter(Boolean)
+      .join('; ');
+    requestHeaders.set('cookie', cookieHeader);
+    response = NextResponse.next({ request: { headers: requestHeaders } });
   } else {
-    response = NextResponse.next({ request: { headers: request.headers } });
+    response = NextResponse.next();
   }
 
+  // нові токени записуються тільки у відповідь
   for (const cookie of newCookies) {
     response.cookies.set(cookie.name, cookie.value as string, cookie);
   }
