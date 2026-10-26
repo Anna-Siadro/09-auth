@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { parseSetCookie } from 'cookie';
 import { checkSession } from './lib/api/serverApi';
 
@@ -7,8 +8,10 @@ const publicRoutes = ['/sign-in', '/sign-up'];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const accessToken = request.cookies.get('accessToken')?.value;
-  const refreshToken = request.cookies.get('refreshToken')?.value;
+
+  const cookieStore = await cookies();
+  const accessToken = cookieStore.get('accessToken')?.value;
+  const refreshToken = cookieStore.get('refreshToken')?.value;
 
   const isPrivateRoute = privateRoutes.some(route => pathname.startsWith(route));
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
@@ -16,7 +19,6 @@ export async function proxy(request: NextRequest) {
   let isAuthenticated = Boolean(accessToken);
   const newCookies: ReturnType<typeof parseSetCookie>[] = [];
 
-  // accessToken закінчився, але є refreshToken: пробуємо оновити сесію
   if (!accessToken && refreshToken) {
     try {
       const res = await checkSession();
@@ -44,10 +46,9 @@ export async function proxy(request: NextRequest) {
   } else if (isPublicRoute && isAuthenticated) {
     response = NextResponse.redirect(new URL('/', request.url));
   } else if (newCookies.length > 0) {
-    // передаємо оновлені токени далі серверним компонентам через копію заголовків
     const requestHeaders = new Headers(request.headers);
     const cookieHeader = [
-      request.headers.get('cookie'),
+      cookieStore.toString(),
       ...newCookies.map(cookie => `${cookie.name}=${cookie.value}`),
     ]
       .filter(Boolean)
@@ -58,7 +59,6 @@ export async function proxy(request: NextRequest) {
     response = NextResponse.next();
   }
 
-  // нові токени записуються тільки у відповідь
   for (const cookie of newCookies) {
     response.cookies.set(cookie.name, cookie.value as string, cookie);
   }
