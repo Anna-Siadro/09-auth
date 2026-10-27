@@ -60,7 +60,16 @@ export async function proxy(request: NextRequest) {
   }
 
   for (const cookie of newCookies) {
-    response.cookies.set(cookie.name, cookie.value as string, cookie);
+    if (!cookie.value) continue;
+
+    response.cookies.set(cookie.name, cookie.value, {
+      path: cookie.path,
+      expires: cookie.expires,
+      maxAge: cookie.maxAge,
+      httpOnly: cookie.httpOnly,
+      secure: cookie.secure,
+      sameSite: cookie.sameSite,
+    });
   }
 
   return response;
