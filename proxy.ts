@@ -28,7 +28,7 @@ export async function proxy(request: NextRequest) {
         const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
         for (const cookieStr of cookieArray) {
           const parsed = parseSetCookie(cookieStr);
-          if (parsed.value) {
+          if (parsed.name && parsed.value) {
             newCookies.push(parsed);
           }
         }
@@ -46,24 +46,6 @@ export async function proxy(request: NextRequest) {
     response = NextResponse.redirect(new URL('/sign-in', request.url));
   } else if (isPublicRoute && isAuthenticated) {
     response = NextResponse.redirect(new URL('/', request.url));
-  } else if (newCookies.length > 0) {
-    const mergedCookies = new Map<string, string>();
-    for (const cookie of cookieStore.getAll()) {
-      mergedCookies.set(cookie.name, cookie.value);
-    }
-    for (const cookie of newCookies) {
-      if (cookie.value) {
-        mergedCookies.set(cookie.name, cookie.value);
-      }
-    }
-
-    const cookieHeader = Array.from(mergedCookies, ([name, value]) => `${name}=${value}`).join(
-      '; '
-    );
-
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set('cookie', cookieHeader);
-    response = NextResponse.next({ request: { headers: requestHeaders } });
   } else {
     response = NextResponse.next();
   }
@@ -72,12 +54,12 @@ export async function proxy(request: NextRequest) {
     if (!cookie.value) continue;
 
     response.cookies.set(cookie.name, cookie.value, {
-      path: cookie.path,
-      expires: cookie.expires,
-      maxAge: cookie.maxAge,
-      httpOnly: cookie.httpOnly,
-      secure: cookie.secure,
-      sameSite: cookie.sameSite,
+      path: cookie.path ?? '/',
+      httpOnly: cookie.httpOnly ?? true,
+      ...(cookie.expires ? { expires: cookie.expires } : {}),
+      ...(cookie.maxAge !== undefined ? { maxAge: cookie.maxAge } : {}),
+      ...(cookie.secure !== undefined ? { secure: cookie.secure } : {}),
+      ...(cookie.sameSite !== undefined ? { sameSite: cookie.sameSite } : {}),
     });
   }
 
