@@ -32,8 +32,9 @@ export async function proxy(request: NextRequest) {
             newCookies.push(parsed);
           }
         }
-        isAuthenticated = res.data.success;
       }
+
+      isAuthenticated = newCookies.some(cookie => cookie.name === 'accessToken');
     } catch {
       isAuthenticated = false;
     }
@@ -46,13 +47,21 @@ export async function proxy(request: NextRequest) {
   } else if (isPublicRoute && isAuthenticated) {
     response = NextResponse.redirect(new URL('/', request.url));
   } else if (newCookies.length > 0) {
+    const mergedCookies = new Map<string, string>();
+    for (const cookie of cookieStore.getAll()) {
+      mergedCookies.set(cookie.name, cookie.value);
+    }
+    for (const cookie of newCookies) {
+      if (cookie.value) {
+        mergedCookies.set(cookie.name, cookie.value);
+      }
+    }
+
+    const cookieHeader = Array.from(mergedCookies, ([name, value]) => `${name}=${value}`).join(
+      '; '
+    );
+
     const requestHeaders = new Headers(request.headers);
-    const cookieHeader = [
-      cookieStore.toString(),
-      ...newCookies.map(cookie => `${cookie.name}=${cookie.value}`),
-    ]
-      .filter(Boolean)
-      .join('; ');
     requestHeaders.set('cookie', cookieHeader);
     response = NextResponse.next({ request: { headers: requestHeaders } });
   } else {
